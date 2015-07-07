@@ -1,0 +1,263 @@
+---
+title: "ratii_slit"
+author: "Eamonn Mallon"
+date: "11/05/2015"
+output: html_document
+---
+
+#DNA analysis
+
+```{r}
+DNA <- read.delim("~/Dropbox/Projects/allele_specific_19_confirmation/data/slit.txt")
+DNA_control <- read.csv("~/Dropbox/Projects/allele_specific_19_confirmation/data/Slit DNA control reference primers .csv")
+DNA$Ct<-DNA$C.t.
+DNA$C.t.<-NULL
+DNA <-rbind(DNA,DNA_control)
+
+
+#Setting up cDNA data
+
+#Install if required
+#install.packages("stringi")
+#install.packages("dplyr")
+#install.packages("reshape2")
+
+library("stringi")
+DNA$temp<-stri_sub(DNA$Description,-5,-1)
+DNA <- DNA[ which(DNA$temp!='water'),] #Getting rid of control samples
+DNA$primer<-stri_sub(DNA$Description,-3,-3) 
+DNA$bee<-stri_sub(DNA$Description,1,3) # Indentifying bee
+
+
+
+
+myvars <- c("Efficiency", "Ct", "bee", "primer")
+DNA <- DNA[myvars]
+xtabs(~ primer + bee, DNA)
+
+
+
+#Averaging
+library("plyr")
+DNA<- as.data.frame(DNA)
+DNA$Ct <- as.numeric(as.character(DNA$Ct))
+DNA$Efficiency <- as.numeric(as.character(DNA$Efficiency))
+DNA[is.na(DNA)] <- 0 #Making NA 0
+
+
+
+
+
+DNA_median<- ddply(DNA, c("bee", "primer"), summarise,
+                median.Ct=median(Ct, na.rm=TRUE), median.E=median(Efficiency[Efficiency>0]))
+DNA_median[is.na(DNA_median)] <- 0 #Making NA 0
+
+#Calculating expression using average efficiency per primer
+DNA_eff_byprimer<- ddply(DNA, c("primer"), summarise,
+                primer_efficiency=median(Efficiency[Efficiency>0]))
+
+DNA_median<- merge(DNA_median,DNA_eff_byprimer,by=c("primer")) 
+
+
+DNA_median$EC<-(DNA_median$primer_efficiency ^ -(DNA_median$median.Ct))
+DNA_temp<-DNA_median [ which(DNA_median$primer=='e'),]
+DNA_median<- merge(DNA_median,DNA_temp,by=c("bee")) 
+DNA_median$ratio<-DNA_median$EC.x/DNA_median$EC.y
+DNA_median <- DNA_median[ which(DNA_median$primer.x!='e'),] #Getting rid of reference rows
+
+DNA_median$ratio[3]<-0#Correcting then one with something to the power of zero
+DNA_median$ratio[6]<-0#Correcting then one with something to the power of zero
+
+
+
+# Drawing a graph
+#oldvalues <- c(DNA_median$bee)
+#newvalues <- factor(c("1","2","3","4"))  # Make this a factor
+#DNA_median$bees <- newvalues[ match(DNA_median$bee, oldvalues) ]
+
+#DNA_median$bee <- as.numeric(as.character(DNA_median$bee))
+#cDNA_median$primer <- as.numeric(as.character(cDNA_median$primer))
+DNA_median$bee<-factor(DNA_median$bee)
+
+
+mat<- DNA_median[ which(DNA_median$primer.x=='T'),]
+mat<-mat$ratio
+
+pat<- DNA_median[ which(DNA_median$primer.x=='G'),]
+pat<-pat$ratio
+
+
+pdf("~/Dropbox/Projects/allele_specific_19_confirmation/analysis/slit-DNA.pdf", width=8, height=8) 
+
+ 
+
+s<-seq(length(mat))
+par(bty="l")
+boxplot(mat,pat,xlab="Allele",ylab="Amplification",names=c("T","G"),col=c("lightblue","lightgreen"))
+stripchart(list(mat,pat),vertical=T,pch=16,method="jitter",cex=0.5,add=T)
+segments(rep(0.95,length(mat))[s],mat[s],rep(2,length(mat))[s],pat[s],col=1,lwd=0.5)
+
+
+dev.off()
+
+s<-seq(length(mat))
+par(bty="l")
+boxplot(mat,pat,xlab="Allele",ylab="Amplification",names=c("T","G"),col=c("lightblue","lightgreen"))
+stripchart(list(mat,pat),vertical=T,pch=16,method="jitter",cex=0.5,add=T)
+segments(rep(0.95,length(mat))[s],mat[s],rep(2,length(mat))[s],pat[s],col=1,lwd=0.5)
+
+# paired t-test
+t.test(mat,pat,paired=TRUE) # where y1 & y2 are numeric 
+
+
+# dependent 2-group Wilcoxon Signed Rank Test
+wilcox.test(mat,pat,paired=TRUE) # where y1 and y2 are numeric 
+
+mean (pat)
+sd(pat)
+
+mean (mat)
+sd(mat)
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+#rm(list=ls(all=TRUE)) 
+#setwd("/home/emallon/Dropbox/Projects/allele_specific_expression_candidate_gene")
+
+#Getting the raw data in
+cDNA <- read.csv("~/Dropbox/Projects/allele_specific_19_confirmation/data/slit_cDNA.csv")
+ras.cdna.control <- read.csv("~/Dropbox/Projects/allele_specific_19_confirmation/data/slit-cdna-control.csv")
+cDNA <-rbind(cDNA,ras.cdna.control)
+
+
+#Setting up cDNA data
+
+#Install if required
+#install.packages("stringi")
+#install.packages("dplyr")
+#install.packages("reshape2")
+
+library("stringi")
+cDNA$temp<-stri_sub(cDNA$Description,1,2)
+cDNA <- cDNA[ which(cDNA$temp=='RT'),] #Getting rid of control samples
+cDNA$primer<-stri_sub(cDNA$Description,4,4)
+cDNA$temp<-stri_sub(cDNA$Description,-7,-4) # Indentifying bee
+cDNA$temp2<-stri_sub(cDNA$temp,4,4) # Indentifying bee
+cDNA$bee<-ifelse (cDNA$temp2 == "-",cDNA$bee <- stri_sub(cDNA$temp,1,3),cDNA$bee <- stri_sub(cDNA$temp,2,4))
+
+
+
+myvars <- c("Efficiency", "Ct", "bee", "primer")
+cDNA <- cDNA[myvars]
+cDNA<-cDNA[-28,]#Really low efficiency
+xtabs(~ primer + bee, cDNA)
+
+
+#Averaging
+library("plyr")
+cDNA<- as.data.frame(cDNA)
+cDNA$Ct <- as.numeric(as.character(cDNA$Ct))
+cDNA$Efficiency <- as.numeric(as.character(cDNA$Efficiency))
+cDNA[is.na(cDNA)] <- 0 #Making NA 0
+
+
+
+
+
+cDNA_median<- ddply(cDNA, c("bee", "primer"), summarise,
+                median.Ct=median(Ct, na.rm=TRUE), median.E=median(Efficiency))
+#cDNA_median[is.na(cDNA_median)] <- 0 #Making NA 0
+
+
+
+
+#Calculating expression using average efficiency per primer
+cDNA_eff_byprimer<- ddply(cDNA, c("primer"), summarise,
+                primer_efficiency=median(Efficiency[Efficiency>0]))
+
+cDNA_median<- merge(cDNA_median,cDNA_eff_byprimer,by=c("primer")) 
+
+
+cDNA_median$EC<-(cDNA_median$primer_efficiency ^ -(cDNA_median$median.Ct))
+cDNA_temp<-cDNA_median [ which(cDNA_median$primer=='r'),]
+cDNA_median<- merge(cDNA_median,cDNA_temp,by=c("bee")) 
+cDNA_median$ratio<-cDNA_median$EC.x/cDNA_median$EC.y
+cDNA_median <- cDNA_median[ which(cDNA_median$primer.x!='r'),] #Getting rid of reference rows
+cDNA_median$ratio[cDNA_median$primer.x=="T"]<-0
+
+
+
+
+
+# Drawing a graph
+#oldvalues <- c(cDNA_median$bee)
+#newvalues <- factor(c("1","2","3","4"))  # Make this a factor
+#cDNA_median$bee <- newvalues[ match(cDNA_median$bee, oldvalues) ]
+
+#cDNA_median$bee <- as.numeric(as.character(cDNA_median$bee))
+#cDNA_median$primer <- as.numeric(as.character(cDNA_median$primer))
+cDNA_median$bee<-factor(cDNA_median$bee)
+
+
+mat<- cDNA_median[ which(cDNA_median$primer.x=='T'),]
+mat<-mat$ratio
+
+pat<- cDNA_median[ which(cDNA_median$primer.x=='G'),]
+pat<-pat$ratio
+
+
+pdf("~/Dropbox/Projects/allele_specific_19_confirmation/analysis/slitcDNA.pdf", width=8, height=8) 
+
+ 
+
+s<-seq(length(mat))
+par(bty="l")
+boxplot(mat,pat,xlab="Allele",ylab="Expression",names=c("T","G"),col=c("lightblue","lightgreen"))
+stripchart(list(mat,pat),vertical=T,pch=16,method="jitter",cex=0.5,add=T)
+segments(rep(0.95,length(mat))[s],mat[s],rep(2,length(mat))[s],pat[s],col=1,lwd=0.5)
+
+
+dev.off()
+
+s<-seq(length(mat))
+par(bty="l")
+boxplot(mat,pat,xlab="Allele",ylab="Expression",names=c("T","G"),col=c("lightblue","lightgreen"))
+stripchart(list(mat,pat),vertical=T,pch=16,method="jitter",cex=0.5,add=T)
+segments(rep(0.95,length(mat))[s],mat[s],rep(2,length(mat))[s],pat[s],col=1,lwd=0.5)
+
+# paired t-test
+t.test(mat,pat,paired=TRUE) # where y1 & y2 are numeric 
+
+
+# dependent 2-group Wilcoxon Signed Rank Test
+wilcox.test(mat,pat,paired=TRUE) # where y1 and y2 are numeric 
+
+mean (pat)
+sd(pat)
+
+mean (mat)
+sd(mat)
+
+
+
+```
+```{r}
+
+DNA_median$acid<-"DNA"
+cDNA_median$acid<-"cDNA"
+total<-rbind(DNA_median,cDNA_median)
+xtabs(~ primer.x + acid, total)
+
+repeated2way<-aov(total$ratio ~ total$primer.x * total$acid + Error(total$bee/(total$primer.x * total$acid))) #Taken from http://ww2.coastal.edu/kingw/statistics/R-tutorials/repeated.html
+summary(repeated2way)
+
+```
